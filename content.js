@@ -469,32 +469,29 @@ class PromptOptimizer {
     // Determine optimization approach based on text length and complexity
     const isLargeText = text.length > 10000;
     const isShortSentence = text.length < 100 && text.split(/[.!?]+/).length <= 2;
-    
-    let prompt;
-    
-    if (isShortSentence) {
-      // For short sentences, focus on grammar and clarity
-      prompt = `Improve this text for grammar and clarity. Source: ${websiteInfo.domain}
 
-Fix grammar, spelling, and make it clearer while keeping the same meaning.
+    let prompt;
+
+    if (isShortSentence) {
+      prompt = `Fix grammar and make this sentence smoother. Source: ${websiteInfo.domain}
+
+Keep the same meaning, tone, and formatting style. Match the original punctuation and formatting exactly—if the input uses plain text without markdown, return plain text. If it uses markdown, keep markdown.
 
 Text: "${text}"
 
 Return only the improved version:`;
     } else if (isLargeText) {
-      // For large text, optimize for LLM consumption
       prompt = `Optimize this text for AI understanding. Source: ${websiteInfo.domain}
 
-Make it clearer and better structured for AI to understand and follow.
+Fix grammar and make sentences smoother and better structured for AI to understand and follow. Match the original punctuation and formatting exactly—if the input uses plain text without markdown, return plain text. If it uses markdown, keep markdown.
 
 Text: "${text}"
 
 Return only the optimized version:`;
     } else {
-      // For medium-length text, balance both approaches
-      prompt = `Improve this text for clarity and effectiveness. Source: ${websiteInfo.domain}
+      prompt = `Improve this text for grammar and clarity. Source: ${websiteInfo.domain}
 
-Fix grammar, make it more specific and actionable while keeping the same intent.
+Fix grammar, make sentences smoother and more specific while keeping the same intent and tone. Match the original punctuation and formatting exactly—if the input uses plain text without markdown, return plain text. If it uses markdown, keep markdown.
 
 Text: "${text}"
 

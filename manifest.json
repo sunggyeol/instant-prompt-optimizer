@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Instant Prompt Optimizer",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Instantly optimize your highlighted text to be better understood by AI using Google's Gemini AI",
   
   "icons": {
