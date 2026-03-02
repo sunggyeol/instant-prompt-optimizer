@@ -1,10 +1,59 @@
 // Background script for Instant Prompt Optimizer
+
+const DEFAULT_SITES = [
+  'claude.ai', 'chatgpt.com', 'chat.openai.com',
+  'perplexity.ai', 'gemini.google.com', 'meta.ai',
+  'grok.com', 'copilot.microsoft.com'
+];
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === 'updateCustomWebsites') {
-    // Store custom websites for later use
-    chrome.storage.sync.set({ customWebsites: request.websites });
+  if (request.action === 'updateActivatedSites') {
+    chrome.storage.sync.set({ activatedSites: request.sites });
     sendResponse({ success: true });
   }
+
+  if (request.action === 'activateCurrentSite') {
+    const hostname = request.hostname;
+    chrome.storage.sync.get(['activatedSites'], (result) => {
+      const sites = result.activatedSites || [];
+      if (!sites.includes(hostname)) {
+        sites.push(hostname);
+        chrome.storage.sync.set({ activatedSites: sites }, () => {
+          // Inject content script into the current tab
+          if (request.tabId) {
+            injectContentScript(request.tabId);
+          }
+          sendResponse({ success: true, sites });
+        });
+      } else {
+        sendResponse({ success: true, sites });
+      }
+    });
+    return true; // async response
+  }
+
+  if (request.action === 'deactivateCurrentSite') {
+    const hostname = request.hostname;
+    chrome.storage.sync.get(['activatedSites'], (result) => {
+      const sites = (result.activatedSites || []).filter(s => s !== hostname);
+      chrome.storage.sync.set({ activatedSites: sites }, () => {
+        sendResponse({ success: true, sites });
+      });
+    });
+    return true; // async response
+  }
+
+  if (request.action === 'getSiteStatus') {
+    const hostname = request.hostname;
+    const isDefault = DEFAULT_SITES.some(site => hostname.includes(site) || site.includes(hostname));
+    chrome.storage.sync.get(['activatedSites'], (result) => {
+      const activatedSites = result.activatedSites || [];
+      const isActivated = activatedSites.includes(hostname);
+      sendResponse({ isDefault, isActivated, activatedSites });
+    });
+    return true; // async response
+  }
+
   return true;
 });
 
@@ -21,98 +70,59 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 
 async function checkAndInjectContentScript(tabId) {
   try {
-    // Get current tab info
     const tab = await chrome.tabs.get(tabId);
     if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://') || tab.url.startsWith('moz-extension://') || tab.url.startsWith('edge://')) {
       return;
     }
-    
+
     const url = new URL(tab.url);
     const hostname = url.hostname;
-    
-    // Skip obvious non-content pages
-    const skipPatterns = [
-      'localhost',
-      '127.0.0.1',
-      '0.0.0.0',
-      '.local'
-    ];
-    
-    // More generous approach: inject on most websites, only skip specific patterns
-    let shouldInject = true;
-    
-    // Skip if it matches skip patterns
-    for (const pattern of skipPatterns) {
-      if (hostname.includes(pattern)) {
-        shouldInject = false;
-        break;
-      }
-    }
-    
-    // Also check if user has specifically added this to custom websites
-    if (shouldInject) {
-      const result = await chrome.storage.sync.get(['customWebsites']);
-      const customWebsites = result.customWebsites || [];
-      
-      // If custom websites are configured, give them priority
-      if (customWebsites.length > 0) {
-        const isCustomSite = customWebsites.some(site => {
-          return hostname.includes(site.url) || site.url.includes(hostname);
-        });
-        
-        // Still include default popular sites even if custom sites are configured
-        const defaultSites = [
-          'claude.ai', 'perplexity.ai', 'chatgpt.com', 'chat.openai.com',
-          'gemini.google.com', 'grok.com', 'google.com', 'bing.com',
-          'duckduckgo.com', 'github.com', 'stackoverflow.com', 'reddit.com'
-        ];
-        
-        const isDefaultSite = defaultSites.some(site => hostname.includes(site));
-        
-        shouldInject = isCustomSite || isDefaultSite;
-      }
-    }
-    
-    if (shouldInject) {
-      // Check if content script is already injected
-      try {
-        const results = await chrome.scripting.executeScript({
-          target: { tabId },
-          func: () => window.promptOptimizerInjected
-        });
-        
-        if (!results[0]?.result) {
-          // Inject content script and CSS
-          await chrome.scripting.executeScript({
-            target: { tabId },
-            files: ['content.js']
-          });
-          
-          await chrome.scripting.insertCSS({
-            target: { tabId },
-            files: ['styles.css']
-          });
-          
-          // Mark as injected
-          await chrome.scripting.executeScript({
-            target: { tabId },
-            func: () => { window.promptOptimizerInjected = true; }
-          });
-        }
-      } catch (error) {
-        console.log('Could not inject content script:', error);
-      }
+
+    // Check if this is a default site (already handled by manifest content_scripts)
+    const isDefaultSite = DEFAULT_SITES.some(site => hostname.includes(site));
+    if (isDefaultSite) return; // manifest handles these
+
+    // Check if user has activated this site
+    const result = await chrome.storage.sync.get(['activatedSites']);
+    const activatedSites = result.activatedSites || [];
+    const isActivated = activatedSites.some(site => hostname.includes(site) || site.includes(hostname));
+
+    if (isActivated) {
+      await injectContentScript(tabId);
     }
   } catch (error) {
     console.log('Error in checkAndInjectContentScript:', error);
   }
 }
 
-// Handle extension install/startup
-chrome.runtime.onStartup.addListener(() => {
-  // Initialize any necessary setup
-});
+async function injectContentScript(tabId) {
+  try {
+    // Check if content script is already injected
+    const results = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => window.promptOptimizerInjected
+    });
 
-chrome.runtime.onInstalled.addListener(() => {
-  // Initialize default settings if needed
-});
+    if (!results[0]?.result) {
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        files: ['content.js']
+      });
+
+      await chrome.scripting.insertCSS({
+        target: { tabId },
+        files: ['styles.css']
+      });
+
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        func: () => { window.promptOptimizerInjected = true; }
+      });
+    }
+  } catch (error) {
+    console.log('Could not inject content script:', error);
+  }
+}
+
+chrome.runtime.onStartup.addListener(() => {});
+chrome.runtime.onInstalled.addListener(() => {});

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Instant Prompt Optimizer",
-  "version": "0.1.1",
+  "version": "0.1.3",
   "description": "Instantly optimize your highlighted text to be better understood by AI using Google's Gemini AI",
   
   "icons": {
@@ -14,6 +14,7 @@
   "permissions": [
     "storage",
     "activeTab",
+    "tabs",
     "scripting"
   ],
   
@@ -30,20 +31,13 @@
     {
       "matches": [
         "*://claude.ai/*",
-        "*://perplexity.ai/*",
         "*://chatgpt.com/*",
         "*://chat.openai.com/*",
+        "*://*.perplexity.ai/*",
         "*://gemini.google.com/*",
+        "*://*.meta.ai/*",
         "*://grok.com/*",
-        "*://google.com/*",
-        "*://*.google.com/*",
-        "*://bing.com/*",
-        "*://*.bing.com/*",
-        "*://duckduckgo.com/*",
-        "*://github.com/*",
-        "*://stackoverflow.com/*",
-        "*://reddit.com/*",
-        "*://*.reddit.com/*"
+        "*://copilot.microsoft.com/*"
       ],
       "js": ["content.js"],
       "css": ["styles.css"]

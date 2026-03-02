@@ -31,6 +31,7 @@ class PromptOptimizer {
     document.addEventListener('mouseup', this.handleTextSelection.bind(this));
     document.addEventListener('keyup', this.handleTextSelection.bind(this));
     document.addEventListener('mousedown', this.handleMouseDown.bind(this));
+    document.addEventListener('input', this.handleInputChange.bind(this), true);
     
     // Listen for API key updates
     chrome.storage.onChanged.addListener((changes) => {
@@ -65,10 +66,9 @@ class PromptOptimizer {
       const selectedText = selection.toString().trim();
       
       if (selectedText.length > 0 && selectedText.length < 500000) {
-        // Make input field detection very generous - check multiple ways
-        const isInInputField = this.isSelectionInInputField(selection) || 
-                              this.isSelectionInAnyInputElement(selection) ||
-                              this.hasActiveInputElement();
+        // Check if the selection is actually inside an input field
+        const isInInputField = this.isSelectionInInputField(selection) ||
+                              this.isSelectionInAnyInputElement(selection);
         
         if (!isInInputField) {
           console.log('Instant Prompt Optimizer: Selection not in any input field, ignoring');
@@ -135,16 +135,8 @@ class PromptOptimizer {
   }
 
   getOptimizeButtonText() {
-    const isLargeText = this.selectedText.length > 10000;
     const isShortSentence = this.selectedText.length < 100 && this.selectedText.split(/[.!?]+/).length <= 2;
-    
-    if (isShortSentence) {
-      return 'Improve Grammar & Clarity';
-    } else if (isLargeText) {
-      return 'Optimize for AI Understanding';
-    } else {
-      return 'Optimize Text';
-    }
+    return isShortSentence ? 'Improve' : 'Optimize';
   }
 
   getHeaderTitle() {
@@ -203,63 +195,115 @@ class PromptOptimizer {
     
     this.optimizationPopup = document.createElement('div');
     this.optimizationPopup.className = 'prompt-optimizer-popup';
-    this.optimizationPopup.innerHTML = `
-      <div class="prompt-optimizer-content">
-        <div class="prompt-optimizer-header" id="dragHandle">
-          <span class="prompt-optimizer-title">
-            <svg class="header-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-              <polyline points="14,2 14,8 20,8"/>
-              <line x1="16" y1="13" x2="8" y2="13"/>
-              <line x1="16" y1="17" x2="8" y2="17"/>
-              <polyline points="10,9 9,9 8,9"/>
-            </svg>
-            ${this.getHeaderTitle()}
-          </span>
-          <button class="prompt-optimizer-close" id="closeOptimizer">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18"/>
-              <line x1="6" y1="6" x2="18" y2="18"/>
-            </svg>
-          </button>
-        </div>
-        <div class="prompt-optimizer-info">
-          <small>Selected: ${this.selectedText.length.toLocaleString()} characters${
-            this.selectedText.length > 100000 ? ' (very large document)' :
-            this.selectedText.length > 50000 ? ' (large document)' :
-            this.selectedText.length > 10000 ? ' (large text)' : ''
-          }</small>
-        </div>
-        <div class="prompt-optimizer-buttons">
-          <button id="optimizeBtn" class="prompt-optimizer-btn primary">
-            <svg class="btn-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-            </svg>
-            ${this.getOptimizeButtonText()}
-          </button>
-          <button id="replaceBtn" class="prompt-optimizer-btn primary" style="display: none;">
-            <svg class="btn-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="20,6 9,17 4,12"/>
-            </svg>
-            Replace Text
-          </button>
-          <button id="copyBtn" class="prompt-optimizer-btn secondary" style="display: none;">
-            <svg class="btn-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-            </svg>
-            Copy Optimized
-          </button>
-        </div>
-        <div id="optimizedText" class="prompt-optimizer-result" style="display: none;"></div>
-        <div id="loadingIndicator" class="prompt-optimizer-loading" style="display: none;">
-          <div class="spinner"></div>
-          <span id="loadingMessage">Optimizing your prompt for AI understanding...</span>
-        </div>
-        ${!this.apiKey ? '<div class="prompt-optimizer-error">⚠️ Please configure Gemini API key in extension popup</div>' : ''}
-      </div>
-    `;
+    const chars = this.selectedText.length;
+    const charDisplay = chars > 10000 ? `${(chars / 1000).toFixed(0)}K` : chars.toLocaleString();
+
+    // Build popup using DOM methods for safety
+    const content = document.createElement('div');
+    content.className = 'prompt-optimizer-content';
+
+    // Header
+    const header = document.createElement('div');
+    header.className = 'prompt-optimizer-header';
+    header.id = 'dragHandle';
+
+    const meta = document.createElement('div');
+    meta.className = 'prompt-optimizer-meta';
+
+    const title = document.createElement('span');
+    title.className = 'prompt-optimizer-title';
+    title.textContent = this.getHeaderTitle();
+
+    const charcount = document.createElement('span');
+    charcount.className = 'prompt-optimizer-charcount';
+    charcount.textContent = `${charDisplay} chars`;
+
+    meta.appendChild(title);
+    meta.appendChild(charcount);
+
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'prompt-optimizer-close';
+    closeBtn.id = 'closeOptimizer';
+    closeBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+
+    header.appendChild(meta);
+    header.appendChild(closeBtn);
+
+    // Body
+    const body = document.createElement('div');
+    body.className = 'prompt-optimizer-body';
+
+    const isMac = /Mac/.test(navigator.userAgent);
+    const modKey = isMac ? '⌘' : 'Ctrl';
+
+    const optimizeBtn = document.createElement('button');
+    optimizeBtn.id = 'optimizeBtn';
+    optimizeBtn.className = 'prompt-optimizer-btn primary';
+    optimizeBtn.appendChild(document.createTextNode(this.getOptimizeButtonText()));
+    const optimizeHint = document.createElement('span');
+    optimizeHint.className = 'po-kbd';
+    optimizeHint.textContent = `${modKey} ↵`;
+    optimizeBtn.appendChild(optimizeHint);
+
+    const loadingIndicator = document.createElement('div');
+    loadingIndicator.id = 'loadingIndicator';
+    loadingIndicator.className = 'prompt-optimizer-loading';
+    loadingIndicator.style.display = 'none';
+
+    const loader = document.createElement('div');
+    loader.className = 'prompt-optimizer-loader';
+    const loadingMsg = document.createElement('span');
+    loadingMsg.id = 'loadingMessage';
+    loadingMsg.textContent = 'Optimizing...';
+    loadingIndicator.appendChild(loader);
+    loadingIndicator.appendChild(loadingMsg);
+
+    const optimizedText = document.createElement('div');
+    optimizedText.id = 'optimizedText';
+    optimizedText.className = 'prompt-optimizer-result';
+    optimizedText.style.display = 'none';
+
+    const actions = document.createElement('div');
+    actions.className = 'prompt-optimizer-actions';
+
+    const replaceBtn = document.createElement('button');
+    replaceBtn.id = 'replaceBtn';
+    replaceBtn.className = 'prompt-optimizer-btn primary';
+    replaceBtn.style.display = 'none';
+    replaceBtn.appendChild(document.createTextNode('Replace'));
+    const replaceHint = document.createElement('span');
+    replaceHint.className = 'po-kbd';
+    replaceHint.textContent = '↵';
+    replaceBtn.appendChild(replaceHint);
+
+    const copyBtn = document.createElement('button');
+    copyBtn.id = 'copyBtn';
+    copyBtn.className = 'prompt-optimizer-btn secondary';
+    copyBtn.style.display = 'none';
+    copyBtn.appendChild(document.createTextNode('Copy'));
+    const copyHint = document.createElement('span');
+    copyHint.className = 'po-kbd';
+    copyHint.textContent = `${modKey} ↵`;
+    copyBtn.appendChild(copyHint);
+
+    actions.appendChild(replaceBtn);
+    actions.appendChild(copyBtn);
+
+    body.appendChild(optimizeBtn);
+    body.appendChild(loadingIndicator);
+    body.appendChild(optimizedText);
+    body.appendChild(actions);
+
+    if (!this.apiKey) {
+      const error = document.createElement('div');
+      error.className = 'prompt-optimizer-error';
+      error.textContent = 'Set up API key in extension settings';
+      body.appendChild(error);
+    }
+
+    content.appendChild(header);
+    content.appendChild(body);
+    this.optimizationPopup.appendChild(content);
     
     // Position the popup intelligently
     this.positionPopup(this.optimizationPopup, rect);
@@ -281,6 +325,26 @@ class PromptOptimizer {
     // Add window event listeners for responsive repositioning
     this.addRepositioningEventListeners();
     
+    // Keyboard shortcuts
+    this.popupKeydownHandler = this.handlePopupKeydown.bind(this);
+    this.popupKeypressBlocker = (e) => {
+      if (!this.optimizationPopup) return;
+      const replaceBtn = document.getElementById('replaceBtn');
+      const optimizeBtn = document.getElementById('optimizeBtn');
+      if (e.key === 'Enter') {
+        const isMod = e.metaKey || e.ctrlKey;
+        const hasResult = replaceBtn && replaceBtn.style.display !== 'none';
+        const hasOptimize = optimizeBtn && optimizeBtn.style.display !== 'none';
+        if (hasResult || (isMod && hasOptimize)) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+        }
+      }
+    };
+    window.addEventListener('keydown', this.popupKeydownHandler, true);
+    window.addEventListener('keypress', this.popupKeypressBlocker, true);
+    window.addEventListener('keyup', this.popupKeypressBlocker, true);
+
     // Check if we have a cached optimization for this text
     this.checkForCachedOptimization();
   }
@@ -322,21 +386,9 @@ class PromptOptimizer {
       loadingMessage.textContent = 'Optimizing your text...';
     }
     
+    optimizeBtn.style.display = 'none';
     loadingIndicator.style.display = 'flex';
     optimizeBtn.disabled = true;
-    optimizeBtn.classList.add('loading');
-    optimizeBtn.innerHTML = `
-      <svg class="btn-icon spinner-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M21 12a9 9 0 11-6.219-8.56"/>
-      </svg>
-      <span>Optimizing...</span>
-    `;
-    
-    // Disable other buttons during loading
-    const replaceBtn = document.getElementById('replaceBtn');
-    const copyBtn = document.getElementById('copyBtn');
-    if (replaceBtn) replaceBtn.disabled = true;
-    if (copyBtn) copyBtn.disabled = true;
     
     try {
       const optimizedPrompt = await this.callGeminiAPI(this.selectedText);
@@ -375,7 +427,8 @@ class PromptOptimizer {
       
     } catch (error) {
       console.error('Instant Prompt Optimizer: Error optimizing prompt:', error);
-      
+      optimizeBtn.style.display = '';
+
       let errorMessage = 'Error optimizing prompt. ';
       if (error.message.includes('API_KEY_INVALID')) {
         errorMessage += 'Invalid API key. Please check your Gemini API key.';
@@ -392,26 +445,9 @@ class PromptOptimizer {
         this.repositionPopupAfterExpansion();
       }, 50);
     } finally {
-      // Reset optimizing state
       this.isOptimizing = false;
-      
-      // Hide loading state
       loadingIndicator.style.display = 'none';
       optimizeBtn.disabled = false;
-      optimizeBtn.classList.remove('loading');
-      optimizeBtn.innerHTML = `
-        <svg class="btn-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-        </svg>
-Optimize for AI Understanding
-      `;
-      
-      // Re-enable other buttons
-      const replaceBtn = document.getElementById('replaceBtn');
-      const copyBtn = document.getElementById('copyBtn');
-      if (replaceBtn) replaceBtn.disabled = false;
-      if (copyBtn) copyBtn.disabled = false;
     }
   }
 
@@ -425,7 +461,7 @@ Optimize for AI Understanding
   }
 
   async callGeminiAPI(text) {
-    const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${this.apiKey}`;
+    const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemma-3-27b-it:generateContent?key=${this.apiKey}`;
     
     // Get website context for dynamic optimization
     const websiteInfo = this.getWebsiteContext();
@@ -1487,6 +1523,40 @@ Return only the improved version:`;
     });
   }
 
+  handlePopupKeydown(event) {
+    if (!this.optimizationPopup || this.isOptimizing) return;
+
+    const isMod = event.metaKey || event.ctrlKey;
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      this.handleCloseClick();
+      return;
+    }
+
+    if (event.key === 'Enter' && isMod) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const optimizeBtn = document.getElementById('optimizeBtn');
+      if (optimizeBtn && optimizeBtn.style.display !== 'none') {
+        this.optimizePrompt();
+      } else {
+        this.copyOptimizedText();
+      }
+      return;
+    }
+
+    if (event.key === 'Enter' && !isMod) {
+      const replaceBtn = document.getElementById('replaceBtn');
+      if (replaceBtn && replaceBtn.style.display !== 'none') {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        this.replaceText();
+      }
+    }
+  }
+
   handleCloseClick() {
     if (this.isOptimizing) {
       // Show a message that operation is in progress
@@ -1526,6 +1596,15 @@ Return only the improved version:`;
     if (this.optimizationPopup) {
       // Clean up event listeners
       this.removeRepositioningEventListeners();
+      if (this.popupKeydownHandler) {
+        window.removeEventListener('keydown', this.popupKeydownHandler, true);
+        this.popupKeydownHandler = null;
+      }
+      if (this.popupKeypressBlocker) {
+        window.removeEventListener('keypress', this.popupKeypressBlocker, true);
+        window.removeEventListener('keyup', this.popupKeypressBlocker, true);
+        this.popupKeypressBlocker = null;
+      }
       this.optimizationPopup = null;
     }
     
@@ -1541,6 +1620,28 @@ Return only the improved version:`;
     if (this.optimizationPopup && !this.optimizationPopup.contains(event.target)) {
       this.clearSelection();
       this.hidePopup();
+    }
+  }
+
+  handleInputChange(event) {
+    // Dismiss popup when the input field content becomes empty (e.g. select all + delete)
+    if (!this.optimizationPopup || this.isOptimizing) return;
+
+    const target = event.target;
+    if (!target) return;
+
+    let content = '';
+    if (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT') {
+      content = target.value || '';
+    } else if (target.contentEditable === 'true') {
+      content = target.textContent || '';
+    } else {
+      return;
+    }
+
+    if (content.trim().length === 0) {
+      this.hidePopup();
+      this.clearCachedOptimization();
     }
   }
 
