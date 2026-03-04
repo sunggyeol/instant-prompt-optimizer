@@ -6,94 +6,167 @@
   <title>Instant Prompt Optimizer</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&display=swap" rel="stylesheet">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     * { scrollbar-width: none; -ms-overflow-style: none; }
     *::-webkit-scrollbar { display: none; }
 
+    :root {
+      --bg: #ffffff;
+      --bg-secondary: #f5f5f7;
+      --bg-inset: #f0f0f2;
+      --border: #e8e8eb;
+      --text: #1d1d1f;
+      --text-secondary: #6e6e73;
+      --text-tertiary: #aeaeb2;
+      --accent: #007aff;
+      --green: #34c759;
+      --green-bg: rgba(52,199,89,0.1);
+      --red: #ff3b30;
+      --red-bg: rgba(255,59,48,0.08);
+      --radius: 8px;
+    }
+
+    html, body {
+      background: var(--bg);
+    }
+
     body {
       width: 320px;
-      font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
-      background: #0a0a0b;
-      color: #e5e5e7;
+      font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      color: var(--text);
       -webkit-font-smoothing: antialiased;
     }
 
+    /* Header */
     .header {
-      padding: 24px 20px 16px;
-      text-align: center;
-      border-bottom: 1px solid #1a1a1d;
+      padding: 20px 16px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
     }
 
+    .header-text { flex: 1; min-width: 0; }
+
     .title {
-      font-size: 17px;
-      font-weight: 600;
-      letter-spacing: -0.01em;
-      color: #f5f5f7;
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.02em;
     }
 
     .subtitle {
-      font-size: 12px;
-      color: #6e6e73;
-      margin-top: 4px;
-      font-weight: 300;
+      font-size: 11.5px;
+      color: var(--text-tertiary);
+      margin-top: 1px;
+      font-weight: 400;
     }
 
+    /* Toggle */
+    .toggle-track {
+      width: 42px;
+      height: 24px;
+      background: #d1d1d6;
+      border-radius: 12px;
+      position: relative;
+      cursor: pointer;
+      transition: background 0.25s ease;
+      border: none;
+      padding: 0;
+      flex-shrink: 0;
+    }
+
+    .toggle-track.active { background: var(--green); }
+
+    .toggle-thumb {
+      width: 20px;
+      height: 20px;
+      background: #fff;
+      border-radius: 50%;
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.15), 0 0 0 0.5px rgba(0,0,0,0.04);
+    }
+
+    .toggle-track.active .toggle-thumb { transform: translateX(18px); }
+
+    /* Disabled state */
+    .container.disabled .section,
+    .container.disabled .status,
+    .container.disabled .instructions,
+    .container.disabled .footer {
+      opacity: 0.35;
+      pointer-events: none;
+    }
+
+    /* Divider */
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 0 16px;
+    }
+
+    /* Sections */
     .section {
-      padding: 16px 20px;
-      border-bottom: 1px solid #1a1a1d;
-      transition: background 0.15s ease;
+      padding: 14px 16px;
     }
-
-    .section:hover { background: #0e0e10; }
 
     .label {
       display: block;
       font-size: 11px;
-      font-weight: 500;
-      color: #6e6e73;
+      font-weight: 600;
+      color: var(--text-secondary);
       text-transform: uppercase;
-      letter-spacing: 0.05em;
+      letter-spacing: 0.04em;
       margin-bottom: 10px;
     }
 
+    /* Input */
     .input-row {
       display: flex;
-      gap: 8px;
+      gap: 6px;
     }
 
     .input-row input {
       flex: 1;
       min-width: 0;
-      padding: 0 12px;
-      background: #111113;
-      border: 1px solid #1f1f23;
-      border-radius: 8px;
-      color: #e5e5e7;
-      font-size: 13px;
+      padding: 0 10px;
+      background: var(--bg-secondary);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-size: 12.5px;
       font-family: inherit;
       height: 34px;
-      transition: border-color 0.15s ease;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
     }
 
-    .input-row input::placeholder { color: #3a3a3f; }
-
+    .input-row input::placeholder { color: var(--text-tertiary); }
     .input-row input:focus {
       outline: none;
-      border-color: #3a3a3f;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(0,122,255,0.12);
+    }
+    .input-row input.valid {
+      border-color: var(--green);
+      box-shadow: 0 0 0 3px rgba(52,199,89,0.1);
+    }
+    .input-row input.invalid {
+      border-color: var(--red);
+      box-shadow: 0 0 0 3px rgba(255,59,48,0.08);
     }
 
-    .input-row input.valid { border-color: #34c759; }
-    .input-row input.invalid { border-color: #ff453a; }
-
+    /* Buttons */
     .btn {
       padding: 0 14px;
       height: 34px;
-      background: #e5e5e7;
+      background: var(--text);
       border: none;
-      border-radius: 8px;
-      color: #0a0a0b;
+      border-radius: var(--radius);
+      color: #fff;
       font-size: 12px;
       font-weight: 600;
       font-family: inherit;
@@ -105,40 +178,67 @@
       justify-content: center;
     }
 
-    .btn:hover:not(:disabled) { background: #f5f5f7; }
+    .btn:hover:not(:disabled) { opacity: 0.8; }
+    .btn:active:not(:disabled) { transform: scale(0.97); }
     .btn:disabled { opacity: 0.3; cursor: default; }
 
-    .link {
-      display: block;
-      font-size: 11px;
-      color: #48484d;
-      margin-top: 8px;
-      text-decoration: none;
-      transition: color 0.15s ease;
+    .btn-sm {
+      padding: 0 11px;
+      height: 28px;
+      font-size: 11.5px;
+      background: var(--bg-secondary);
+      color: var(--text);
+      border: 1.5px solid var(--border);
     }
 
-    .link:hover { color: #e5e5e7; }
+    .btn-sm:hover:not(:disabled) {
+      opacity: 1;
+      background: var(--bg-inset);
+      border-color: #d0d0d4;
+    }
+
+    .btn-danger {
+      background: var(--red-bg);
+      border-color: transparent;
+      color: var(--red);
+    }
+    .btn-danger:hover:not(:disabled) {
+      opacity: 1;
+      background: rgba(255,59,48,0.14);
+    }
+
+    .link {
+      display: inline-block;
+      font-size: 11px;
+      color: var(--accent);
+      margin-top: 8px;
+      text-decoration: none;
+      font-weight: 500;
+      transition: opacity 0.15s ease;
+    }
+    .link:hover { opacity: 0.7; }
 
     /* Status */
     .status {
-      padding: 10px 20px;
-      border-bottom: 1px solid #1a1a1d;
+      padding: 10px 16px;
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       gap: 8px;
-      font-size: 12px;
-      color: #6e6e73;
+      font-size: 11.5px;
+      color: var(--text-secondary);
+      line-height: 1.4;
     }
 
     .status-indicator {
-      width: 6px;
-      height: 6px;
+      width: 7px;
+      height: 7px;
       border-radius: 50%;
       flex-shrink: 0;
+      margin-top: 3px;
     }
 
-    .status-ready { background: #34c759; }
-    .status-error { background: #ff453a; }
+    .status-ready { background: var(--green); }
+    .status-error { background: var(--red); }
     .status-loading { background: #ff9f0a; animation: pulse 1.5s infinite; }
 
     @keyframes pulse {
@@ -163,19 +263,19 @@
     }
 
     .site-indicator {
-      width: 6px;
-      height: 6px;
+      width: 7px;
+      height: 7px;
       border-radius: 50%;
       flex-shrink: 0;
     }
 
-    .site-indicator.active { background: #34c759; }
-    .site-indicator.inactive { background: #48484d; }
+    .site-indicator.active { background: var(--green); }
+    .site-indicator.inactive { background: var(--text-tertiary); }
 
     .site-hostname {
       font-size: 13px;
-      color: #e5e5e7;
-      font-weight: 400;
+      color: var(--text);
+      font-weight: 500;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -184,28 +284,13 @@
     .site-badge {
       display: inline-block;
       font-size: 10px;
-      font-weight: 500;
-      color: #6e6e73;
-      background: rgba(255,255,255,0.06);
-      padding: 2px 8px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      background: var(--bg-inset);
+      padding: 3px 8px;
       border-radius: 4px;
       margin-top: 8px;
-      letter-spacing: 0.03em;
-    }
-
-    .btn-sm {
-      padding: 0 12px;
-      height: 28px;
-      font-size: 11px;
-    }
-
-    .btn-danger {
-      background: rgba(255, 69, 58, 0.12);
-      color: #ff453a;
-    }
-
-    .btn-danger:hover:not(:disabled) {
-      background: rgba(255, 69, 58, 0.2);
+      letter-spacing: 0.02em;
     }
 
     /* Sites list */
@@ -215,10 +300,10 @@
     .activated-site-item {
       display: flex;
       align-items: center;
-      padding: 6px 10px;
-      background: #111113;
-      border: 1px solid #1f1f23;
-      border-radius: 8px;
+      padding: 7px 10px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
       margin-bottom: 4px;
       transition: all 0.15s ease;
       animation: slide-in 0.2s ease forwards;
@@ -230,14 +315,14 @@
       to { opacity: 1; transform: translateY(0); }
     }
 
-    .activated-site-item:hover { border-color: #3a3a3f; }
+    .activated-site-item:hover { background: var(--bg-inset); }
     .activated-site-item:last-child { margin-bottom: 0; }
 
     .activated-site-indicator {
       width: 6px;
       height: 6px;
       border-radius: 50%;
-      background: #34c759;
+      background: var(--green);
       flex-shrink: 0;
       margin-right: 10px;
     }
@@ -246,7 +331,7 @@
 
     .activated-site-url {
       font-size: 12px;
-      color: #e5e5e7;
+      color: var(--text);
       font-weight: 400;
       display: block;
       white-space: nowrap;
@@ -257,7 +342,7 @@
     .remove-site-btn {
       background: none;
       border: none;
-      color: #3a3a3f;
+      color: var(--text-tertiary);
       cursor: pointer;
       padding: 4px;
       border-radius: 4px;
@@ -269,23 +354,23 @@
     }
 
     .remove-site-btn:hover {
-      color: #ff453a;
-      background: rgba(255, 69, 58, 0.1);
+      color: var(--red);
+      background: var(--red-bg);
     }
 
     /* Instructions */
     .instructions ol {
       padding-left: 16px;
-      font-size: 12px;
-      color: #48484d;
-      line-height: 1.8;
+      font-size: 11.5px;
+      color: var(--text-tertiary);
+      line-height: 1.9;
     }
 
     .footer {
-      padding: 12px 20px;
+      padding: 12px 16px;
       text-align: center;
-      font-size: 11px;
-      color: #3a3a3f;
+      font-size: 10px;
+      color: var(--text-tertiary);
     }
 
     .icon {
@@ -303,9 +388,16 @@
 <body>
   <div class="container">
     <header class="header">
-      <h1 class="title">Instant Prompt Optimizer</h1>
-      <p class="subtitle">Optimize text for AI clarity</p>
+      <div class="header-text">
+        <h1 class="title">Instant Prompt Optimizer</h1>
+        <p class="subtitle">Optimize text for AI clarity</p>
+      </div>
+      <button class="toggle-track active" id="masterToggle" title="Enable/Disable extension">
+        <span class="toggle-thumb"></span>
+      </button>
     </header>
+
+    <div class="divider"></div>
 
     <section class="section">
       <label class="label">API Key</label>
@@ -321,13 +413,15 @@
       <span id="statusContent"></span>
     </div>
 
+    <div class="divider"></div>
+
     <section class="section" id="currentSiteSection">
       <label class="label">Current Website</label>
       <div class="site-status" id="siteStatus">
         <div class="site-status-row">
           <div class="site-info">
             <span class="site-indicator" id="siteIndicator"></span>
-            <span class="site-hostname" id="siteHostname">—</span>
+            <span class="site-hostname" id="siteHostname">&mdash;</span>
           </div>
           <button id="toggleSiteBtn" class="btn btn-sm" style="display:none;">Activate</button>
         </div>
@@ -335,6 +429,8 @@
       </div>
       <div id="activatedSitesList" class="sites-list"></div>
     </section>
+
+    <div class="divider"></div>
 
     <section class="section instructions">
       <label class="label">How to use</label>
@@ -345,8 +441,10 @@
       </ol>
     </section>
 
+    <div class="divider"></div>
+
     <footer class="footer">
-      Active on Claude, ChatGPT, Gemini, Perplexity, Grok, Meta AI & Copilot
+      Supports Claude, ChatGPT, Gemini, Perplexity, Grok, Meta AI & Copilot
     </footer>
   </div>
 

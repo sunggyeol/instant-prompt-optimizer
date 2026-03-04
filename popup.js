@@ -9,19 +9,43 @@ document.addEventListener('DOMContentLoaded', async () => {
   const siteBadge = document.getElementById('siteBadge');
   const toggleSiteBtn = document.getElementById('toggleSiteBtn');
   const activatedSitesList = document.getElementById('activatedSitesList');
+  const masterToggle = document.getElementById('masterToggle');
+  const container = document.querySelector('.container');
 
   let currentHostname = null;
   let currentTabId = null;
   let currentSiteStatus = { isDefault: false, isActivated: false };
+  let extensionEnabled = true;
+
+  // Load extension enabled state
+  try {
+    const enabledResult = await chrome.storage.sync.get(['extensionEnabled']);
+    extensionEnabled = enabledResult.extensionEnabled !== false; // default true
+    updateMasterToggleUI();
+  } catch (error) {
+    console.error('Error loading extension state:', error);
+  }
+
+  // Master toggle handler
+  masterToggle.addEventListener('click', async () => {
+    extensionEnabled = !extensionEnabled;
+    await chrome.storage.sync.set({ extensionEnabled });
+    updateMasterToggleUI();
+  });
+
+  function updateMasterToggleUI() {
+    masterToggle.classList.toggle('active', extensionEnabled);
+    container.classList.toggle('disabled', !extensionEnabled);
+  }
 
   // Load existing API key
   try {
     const result = await chrome.storage.sync.get(['geminiApiKey']);
     if (result.geminiApiKey) {
       apiKeyInput.value = result.geminiApiKey;
-      hideStatus();
+      updateStatus('ready', 'API key configured');
     } else {
-      updateStatus('error', 'Please configure your Gemini API key to start optimizing prompts.');
+      updateStatus('error', 'Add your Gemini API key to get started.');
     }
   } catch (error) {
     console.error('Error loading configuration:', error);
@@ -64,7 +88,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     toggleSiteBtn.disabled = true;
 
     try {
-      if (currentSiteStatus.isActivated) {
+      // Handle default site enable/disable
+      if (currentSiteStatus.isDefault) {
+        if (currentSiteStatus.isDisabledDefault) {
+          await chrome.runtime.sendMessage({
+            action: 'enableDefaultSite',
+            hostname: currentHostname
+          });
+          currentSiteStatus.isDisabledDefault = false;
+        } else {
+          await chrome.runtime.sendMessage({
+            action: 'disableDefaultSite',
+            hostname: currentHostname
+          });
+          currentSiteStatus.isDisabledDefault = true;
+        }
+        updateSiteUI(currentSiteStatus);
+      } else if (currentSiteStatus.isActivated) {
         const result = await chrome.runtime.sendMessage({
           action: 'deactivateCurrentSite',
           hostname: currentHostname
@@ -90,10 +130,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   function updateSiteUI(status) {
-    if (status.isDefault) {
+    if (status.isDefault && !status.isDisabledDefault) {
       siteIndicator.className = 'site-indicator active';
-      toggleSiteBtn.style.display = 'none';
-      siteBadge.textContent = 'Default site \u2014 always active';
+      toggleSiteBtn.textContent = 'Deactivate';
+      toggleSiteBtn.className = 'btn btn-sm btn-danger';
+      toggleSiteBtn.style.display = 'inline-flex';
+      siteBadge.textContent = 'Default site';
+      siteBadge.style.display = 'inline-block';
+    } else if (status.isDefault && status.isDisabledDefault) {
+      siteIndicator.className = 'site-indicator inactive';
+      toggleSiteBtn.textContent = 'Activate';
+      toggleSiteBtn.className = 'btn btn-sm';
+      toggleSiteBtn.style.display = 'inline-flex';
+      siteBadge.textContent = 'Default site — disabled';
       siteBadge.style.display = 'inline-block';
     } else if (status.isActivated) {
       siteIndicator.className = 'site-indicator active';
@@ -213,19 +262,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       if (isValid) {
         await chrome.storage.sync.set({ geminiApiKey: apiKey });
-        updateStatus('ready', 'API key saved successfully!');
+        updateStatus('ready', 'API key saved!');
         apiKeyInput.classList.add('valid');
-        hideStatus();
       } else {
         apiKeyInput.classList.add('invalid');
-        updateStatus('error', 'Invalid API key. Please check your Gemini API key and try again.');
-        alert('API key validation failed. Please check your key and try again.');
+        updateStatus('error', 'Invalid API key. Check your key and try again.');
       }
     } catch (error) {
       console.error('Error saving API key:', error);
       apiKeyInput.classList.add('invalid');
       updateStatus('error', 'Error saving API key. Please try again.');
-      alert('Error saving API key. Please try again.');
     } finally {
       saveApiKeyBtn.disabled = false;
     }
@@ -251,11 +297,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     statusSection.style.display = 'flex';
     statusIndicator.className = `status-indicator status-${type}`;
     statusContent.textContent = message;
-  }
-
-  function hideStatus() {
-    const statusSection = document.querySelector('.status');
-    statusSection.style.display = 'none';
   }
 
   async function testApiKey(apiKey) {

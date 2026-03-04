@@ -46,12 +46,41 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'getSiteStatus') {
     const hostname = request.hostname;
     const isDefault = DEFAULT_SITES.some(site => hostname.includes(site) || site.includes(hostname));
-    chrome.storage.sync.get(['activatedSites'], (result) => {
+    chrome.storage.sync.get(['activatedSites', 'disabledDefaultSites'], (result) => {
       const activatedSites = result.activatedSites || [];
+      const disabledDefaultSites = result.disabledDefaultSites || [];
       const isActivated = activatedSites.includes(hostname);
-      sendResponse({ isDefault, isActivated, activatedSites });
+      const isDisabledDefault = isDefault && disabledDefaultSites.some(site => hostname.includes(site) || site.includes(hostname));
+      sendResponse({ isDefault, isActivated, isDisabledDefault, activatedSites });
     });
     return true; // async response
+  }
+
+  if (request.action === 'disableDefaultSite') {
+    const hostname = request.hostname;
+    chrome.storage.sync.get(['disabledDefaultSites'], (result) => {
+      const sites = result.disabledDefaultSites || [];
+      if (!sites.includes(hostname)) {
+        sites.push(hostname);
+        chrome.storage.sync.set({ disabledDefaultSites: sites }, () => {
+          sendResponse({ success: true, sites });
+        });
+      } else {
+        sendResponse({ success: true, sites });
+      }
+    });
+    return true;
+  }
+
+  if (request.action === 'enableDefaultSite') {
+    const hostname = request.hostname;
+    chrome.storage.sync.get(['disabledDefaultSites'], (result) => {
+      const sites = (result.disabledDefaultSites || []).filter(s => s !== hostname);
+      chrome.storage.sync.set({ disabledDefaultSites: sites }, () => {
+        sendResponse({ success: true, sites });
+      });
+    });
+    return true;
   }
 
   return true;
@@ -74,6 +103,10 @@ async function checkAndInjectContentScript(tabId) {
     if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://') || tab.url.startsWith('moz-extension://') || tab.url.startsWith('edge://')) {
       return;
     }
+
+    // Check if extension is globally enabled
+    const globalState = await chrome.storage.sync.get(['extensionEnabled']);
+    if (globalState.extensionEnabled === false) return;
 
     const url = new URL(tab.url);
     const hostname = url.hostname;

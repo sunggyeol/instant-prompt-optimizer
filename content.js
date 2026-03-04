@@ -7,16 +7,24 @@ class PromptOptimizer {
     this.apiKey = null;
     this.isOptimizing = false; // Track if an optimizing request is in progress
     this.justClosed = false; // Track if popup was just closed to prevent immediate reopening
-    
+    this.isDisabled = false; // Track if extension is globally or per-site disabled
+
     this.init();
   }
 
   async init() {
-    // Load API key from storage
+    // Load API key and check disabled state
     try {
-      const result = await chrome.storage.sync.get(['geminiApiKey']);
+      const result = await chrome.storage.sync.get(['geminiApiKey', 'extensionEnabled', 'disabledDefaultSites']);
       this.apiKey = result.geminiApiKey;
-      
+
+      // Check if globally disabled or current site is disabled
+      const hostname = window.location.hostname.replace(/^www\./, '');
+      const globallyDisabled = result.extensionEnabled === false;
+      const disabledDefaults = result.disabledDefaultSites || [];
+      const siteDisabled = disabledDefaults.some(site => hostname.includes(site) || site.includes(hostname));
+      this.isDisabled = globallyDisabled || siteDisabled;
+
       if (!this.apiKey) {
         console.warn('Instant Prompt Optimizer: No Gemini API key found. Please configure in extension popup.');
       }
@@ -24,24 +32,70 @@ class PromptOptimizer {
       console.error('Instant Prompt Optimizer: Error loading API key:', error);
     }
 
+    if (this.isDisabled) {
+      console.log('Instant Prompt Optimizer: Disabled on this site.');
+      return;
+    }
+
     // Try to restore any pending optimization state
     await this.restoreOptimizationState();
 
     // Set up event listeners
-    document.addEventListener('mouseup', this.handleTextSelection.bind(this));
-    document.addEventListener('keyup', this.handleTextSelection.bind(this));
-    document.addEventListener('mousedown', this.handleMouseDown.bind(this));
-    document.addEventListener('input', this.handleInputChange.bind(this), true);
-    
-    // Listen for API key updates
+    this._boundHandleTextSelection = this.handleTextSelection.bind(this);
+    this._boundHandleMouseDown = this.handleMouseDown.bind(this);
+    this._boundHandleInputChange = this.handleInputChange.bind(this);
+    document.addEventListener('mouseup', this._boundHandleTextSelection);
+    document.addEventListener('keyup', this._boundHandleTextSelection);
+    document.addEventListener('mousedown', this._boundHandleMouseDown);
+    document.addEventListener('input', this._boundHandleInputChange, true);
+
+    // Listen for storage changes (API key, enable/disable)
     chrome.storage.onChanged.addListener((changes) => {
       if (changes.geminiApiKey) {
         this.apiKey = changes.geminiApiKey.newValue;
       }
+      if (changes.extensionEnabled || changes.disabledDefaultSites) {
+        this._checkDisabledState();
+      }
     });
-    
+
     // Clean up old optimization data (older than 1 hour)
     this.cleanupOldOptimizations();
+  }
+
+  async _checkDisabledState() {
+    const result = await chrome.storage.sync.get(['extensionEnabled', 'disabledDefaultSites']);
+    const hostname = window.location.hostname.replace(/^www\./, '');
+    const globallyDisabled = result.extensionEnabled === false;
+    const disabledDefaults = result.disabledDefaultSites || [];
+    const siteDisabled = disabledDefaults.some(site => hostname.includes(site) || site.includes(hostname));
+    const shouldDisable = globallyDisabled || siteDisabled;
+
+    if (shouldDisable && !this.isDisabled) {
+      // Disable: remove listeners and hide popup
+      this.isDisabled = true;
+      this.hidePopup();
+      if (this._boundHandleTextSelection) {
+        document.removeEventListener('mouseup', this._boundHandleTextSelection);
+        document.removeEventListener('keyup', this._boundHandleTextSelection);
+        document.removeEventListener('mousedown', this._boundHandleMouseDown);
+        document.removeEventListener('input', this._boundHandleInputChange, true);
+      }
+      console.log('Instant Prompt Optimizer: Disabled.');
+    } else if (!shouldDisable && this.isDisabled) {
+      // Re-enable: re-attach listeners
+      this.isDisabled = false;
+      if (!this._boundHandleTextSelection) {
+        this._boundHandleTextSelection = this.handleTextSelection.bind(this);
+        this._boundHandleMouseDown = this.handleMouseDown.bind(this);
+        this._boundHandleInputChange = this.handleInputChange.bind(this);
+      }
+      document.addEventListener('mouseup', this._boundHandleTextSelection);
+      document.addEventListener('keyup', this._boundHandleTextSelection);
+      document.addEventListener('mousedown', this._boundHandleMouseDown);
+      document.addEventListener('input', this._boundHandleInputChange, true);
+      console.log('Instant Prompt Optimizer: Re-enabled.');
+    }
   }
 
   handleTextSelection(event) {
